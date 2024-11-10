@@ -76,7 +76,7 @@ class ResUser(models.Model):
         # return user credentials
         return self.env.cr.dbname, login, saml_response
 
-    def _check_credentials(self, password, env):
+    def _check_credentials(self, credential, env):
         """Override to handle SAML auths.
 
         The token can be a password if the user has used the normal form...
@@ -84,10 +84,16 @@ class ResUser(models.Model):
         and the interesting code is inside the "except" clause.
         """
         try:
-            # Attempt a regular login (via other auth addons) first.
-            return super()._check_credentials(password, env)
+            if self.allow_saml_and_password():
+                # If both SAML and password are allowed we can try first the normal auth
+                return super()._check_credentials(credential, env)
+            else:
+                # If only SAML we go to the except clause
+                raise AccessDenied() from None
 
         except (AccessDenied, passlib.exc.PasswordSizeError):
+            if not (credential["type"] == "saml_token" and credential["token"]):
+                raise
             passwd_allowed = (
                 env["interactive"] or not self.env.user._rpc_api_keys_only()
             )
@@ -100,12 +106,16 @@ class ResUser(models.Model):
                     .search(
                         [
                             ("user_id", "=", self.env.user.id),
-                            ("saml_access_token", "=", password),
+                            ("saml_access_token", "=", credential["token"]),
                         ]
                     )
                 )
                 if token:
-                    return
+                    return {
+                        "uid": self.env.user.id,
+                        "auth_method": "saml",
+                        "mfa": "default",
+                    }
             raise AccessDenied() from None
 
     @api.model
