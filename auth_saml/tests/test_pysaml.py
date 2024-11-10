@@ -332,16 +332,14 @@ class TestPySaml(HttpCase):
         with self.assertRaises(ValidationError):
             user.password = "new password"
 
-    def test_disallow_user_password(self):
+    def test_disallow_user_password_on_option_disable(self):
         """Test that existing user password is deleted when adding an SAML provider when
         the disallow option is set."""
+        self.authenticate(user="test@example.com", password="Lu,ums-7vRU>0i]=YDLa")
         # change the option
         self.browse_ref(
             "auth_saml.allow_saml_uid_and_internal_password"
         ).value = "False"
-        # Test that existing user password is deleted when adding an SAML provider
-        self.authenticate(user="test@example.com", password="Lu,ums-7vRU>0i]=YDLa")
-        self.add_provider_to_user()
         with self.assertRaises(AccessDenied):
             self.authenticate(user="test@example.com", password="Lu,ums-7vRU>0i]=YDLa")
 
