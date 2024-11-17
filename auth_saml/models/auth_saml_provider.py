@@ -276,6 +276,38 @@ class AuthSamlProvider(models.Model):
         self._store_outstanding_request(reqid)
 
         return redirect_url
+    
+    def _logout(self, saml_user, redirect, url_root=None):
+        """
+        build a logout request and give it back to our client
+        """
+        state = {
+            "d": self.env.cr.dbname,
+            "p": self.id,
+        }
+
+        sig_alg = ds.SIG_RSA_SHA1
+        if self.sig_alg:
+            sig_alg = getattr(ds, self.sig_alg)
+
+        saml_client = self._get_client_for_provider(url_root)
+        reqid, info = saml_client.prepare_for_logout(
+            sign=self.sign_authenticate_requests,
+            relay_state=json.dumps(state),
+            sigalg=sig_alg,
+        )
+        
+        redirect_url = None
+        # Select the IdP URL to send the AuthN request to
+        for key, value in info["headers"]:
+            if key == "Location":
+                redirect_url = value
+
+        self._store_outstanding_request(reqid)
+
+        saml_user.saml_access_token = None
+
+        return redirect_url
 
     def _validate_auth_response(self, token: str, base_url: str = None):
         """return the validation data corresponding to the access token"""
